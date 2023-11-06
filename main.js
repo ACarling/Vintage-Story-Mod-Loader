@@ -5,8 +5,9 @@ const path = require("node:path")
 
 // TODO: prompt to pick what version of mod to use
 // TODO: prompt to delete pack
+// TODO: put loaded and new mods in editor under tabs
 
-
+// TODO: work out tag sorting 
 // TODO: default user settings loaded into every new pack (keybinds)
 // TODO: import from file 
 // TODO: download all dependencies

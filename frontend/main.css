@@ -6,6 +6,12 @@ body {
     /* overflow: hidden; */
 }
 
+a {
+    cursor: pointer;
+    color: blue;
+    text-decoration: underline;
+}
+
 hr {
     width: 100%;
 }
@@ -80,10 +86,10 @@ hr {
 
 .mod-list {
     overflow-y: scroll;
-    height: calc(100% - 50px);
+    height: calc(100% - 90px);
 }
 .search-header {
-    height: 50px;
+    height: 90px;
 }
 
 

@@ -29,11 +29,14 @@
             currentEdit: null,
 
             // for searching mods
+            possibleFilterTags: [],
+
             newModStringFilter: "",
             newModtagFilter: [],
 
             loadedModStringFilter: "",
             loadedModtagFilter: [],
+            showModDownloadPage: false,
 
             // loaded mod import string
             loadedImportString: "",
@@ -56,6 +59,7 @@
                 this.getVSGameVersionList();
                 this.getModpackList()
                 this.getModDBList()
+                this.getFilterTags()
 
                 // download stream api
                 window.downloadAPI.downloadStreamNotifier((event, data) => {
@@ -102,6 +106,18 @@
                 fetch("https://mods.vintagestory.at/api/gameversions").then(res => res.json())
                 .then((data) => {
                     this.versionList = data.gameversions.map( gversion => gversion.name.substring(1))
+                })
+            },
+
+
+            getFilterTags() {
+                console.log("getting filter tags")
+                fetch("https://mods.vintagestory.at/api/tags").then(data => data.json())
+                .then(response => {
+                    if(response.statuscode == 200) {
+                        this.possibleFilterTags = response.tags.map(u => u.name)
+                        console.log(this.possibleFilterTags)
+                    }
                 })
             },
 
@@ -294,6 +310,7 @@
                 if(!modList || modList.length == 0) {
                     return []
                 }
+                console.log(tagFilter)
                 return modList.filter(mod => {
 
                     if(excludeFilter) {
@@ -306,21 +323,25 @@
                     }
 
                     // tag filter
-                    for(let i = 0; i < tagFilter.length; i++) {
-                        if(mod.tags.find(t => t == tagFilter[i])) {
+                    // var tagCatch = false;
+
+                    // for(let i = 0; i < tagFilter.length; i++) {
+                    //     if(mod.tags.find(t => { return t == tagFilter[i]})) {
+                    //         tagCatch = true
+                    //     }
+                    // }
+
+                    if(stringFilter.length != 0) {
+                        // string filter
+                        if(mod.author.toLowerCase().includes(stringFilter)) {
                             return true;
                         }
-                    }
-
-                    // string filter
-                    if(mod.author.toLowerCase().includes(stringFilter)) {
-                        return true;
-                    }
-                    if(mod.name.toLowerCase().includes(stringFilter)) {
-                        return true;
-                    }
-                    if(mod.modid.toString().includes(stringFilter)) {
-                        return true;
+                        if(mod.name.toLowerCase().includes(stringFilter)) {
+                            return true;
+                        }
+                        if(mod.modid.toString().includes(stringFilter)) {
+                            return true;
+                        }
                     }
                     
                     if(tagFilter.length == 0 && stringFilter.length == 0) return true;
@@ -335,6 +356,7 @@
                 this.newModtagFilter = []
                 this.loadedModStringFilter = ""
                 this.loadedModtagFilter = []
+                this.showNewMods = false
             },
 
 
@@ -458,12 +480,17 @@
             
             
             <!-- Loaded mods -->
-            <div class="container noscroll" :class="currentEdit.imported ? 'twothird' : 'third'">
+            <div v-if="!showModDownloadPage" class="container noscroll twothird">
                 <div class="search-header">
+                    <button v-if="!currentEdit.imported" @click="showModDownloadPage = true"> Show downloadable mods &gt;</button>
                     <h3>Loaded mods</h3>
                     <form>
                         Search:
                         <input type="text" v-model="loadedModStringFilter">
+                        <!-- <span v-for="tag in possibleFilterTags">
+                            <input type="checkbox" :id="tag" :value="tag" v-model="loadedModtagFilter">
+                            <label :for="tag">{{tag}}</label>    
+                        </span> -->
                     </form>
                 </div>
 
@@ -474,7 +501,8 @@
                         <p>{{mod.modid}} {{mod.name}}</p>
                         <p>by: {{mod.author}}</p>
                         <p>{{mod.summary}}</p>
-                        <p>{{mod.tags}}</p> <br>
+                        <p>{{mod.tags}}</p>
+                        <a @click="openLinkInBrowser" v-if="mod.urlalias">https://mods.vintagestory.at/{{mod.urlalias}}</a><br>
                         <button v-if="!currentEdit.imported" @click="removeMod" :value="mod.modid">Remove mod</button>
                     </div>
                 </div>
@@ -483,13 +511,18 @@
 
 
             <!-- Downloadable mods -->
-            <div class="container noscroll third" v-if="!currentEdit.imported">
+            <div v-if="showModDownloadPage" class="container noscroll twothird" v-if="!currentEdit.imported">
 
                 <div class="search-header">
+                    <button @click="showModDownloadPage = false"> &lt; Show loaded mods</button>
                     <h3>Add mods</h3>
                     <form>
                         Search:
                         <input type="text" v-model="newModStringFilter">
+                        <!-- <span v-for="tag in possibleFilterTags">
+                            <input type="checkbox" :id="tag" :value="tag" v-model="newModtagFilter">
+                            <label :for="tag">{{tag}}</label>    
+                        </span> -->
                     </form>
                 </div>
 
