@@ -1,5 +1,7 @@
+const {app} = require("electron")
+
 const { dirname } = require('path');
-const __appDir = dirname(require.main.filename);
+const __appDir = dirname(app.getPath("exe"));
 
 const {OSdata, getOSString} = require("./globals.js")
 const fs = require("fs")
@@ -10,6 +12,7 @@ const { exec } = require('child_process');
 const {CreateRes} = require("./common.js");
 const { loadedMods, getDBmods } = require('./launcherManager.js');
 
+console.log(`${__appDir}`)
 
 
 //https://cdn.vintagestory.at/gamefiles/stable/vs_install_win-x64_1.18.15.exe
@@ -289,6 +292,19 @@ module.exports = {
         return new Promise(async (resolve, reject) => {
             const packName = data.name;
             const packMods = data.mods;
+
+            for (let i = 0; i < packMods.length; i++) {
+                const mod = packMods[i];
+                if(!mod.fileName) {
+                    resolve(CreateRes(400, "Invalid Pack string"))
+                }
+                if(!mod.fileID) {
+                    resolve(CreateRes(400, "Invalid Pack string"))
+                }
+                if(!mod.modid) {
+                    resolve(CreateRes(400, "Invalid Pack string"))
+                }
+            }
     
     
     

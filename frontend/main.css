@@ -92,7 +92,10 @@ hr {
     height: 90px;
 }
 
-
+.pack-creator {
+    display: flex;
+    flex-direction: column;
+}
 
 
 /* DIALOGUE */
@@ -108,6 +111,8 @@ hr {
 .overlay-container {
     background-color: white;
     max-width: 550px;
+    max-height: 80vh;
+    overflow-y: auto;
     width: 90vw;
     border: 1px solid black;
     padding: 5px;

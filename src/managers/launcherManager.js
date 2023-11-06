@@ -1,5 +1,7 @@
+const {app} = require("electron")
+
 const { dirname } = require('path');
-const __appDir = dirname(require.main.filename);
+const __appDir = dirname(app.getPath("exe"));
 
 const {CreateRes} = require("./common.js")
 const fs = require('fs')
@@ -69,6 +71,7 @@ module.exports = {
                     }
                     res(CreateRes(200, packJsonList))
                 });
+                res(CreateRes(200, []))
             })
         });
     },

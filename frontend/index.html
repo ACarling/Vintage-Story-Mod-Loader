@@ -59,7 +59,7 @@
                 this.getVSGameVersionList();
                 this.getModpackList()
                 this.getModDBList()
-                this.getFilterTags()
+                // this.getFilterTags()
 
                 // download stream api
                 window.downloadAPI.downloadStreamNotifier((event, data) => {
@@ -152,16 +152,28 @@
                     window.electronAPI.alert("pick a version")
                     return;
                 }
-                const res = await window.downloadAPI.createModPack({version: this.selectedVersion, name: this.packName});
-                console.log(res)
-                if (res.code != 200) {
-                    window.electronAPI.alert(JSON.stringify(res))
+
+                const answer = await this.getResponseFromQuestion(
+                    `<b>IMPORTANT - install instructions</b><br>If prompted to uninstall old version of vintage story <b>PRESS NO</b>
+                    <br>Keep all install settings as is
+                    <br>Once install is complete UNCHECK launch vintage story
+                    <br><br><b>TLDR</b>: When installer pops up: Press no - next - next - install - uncheck "launch Vintage story" - finish
+                    <br><br><b>DO YOU UNDERSTAND?</b>`, 
+                    ["yes", "no"]);
+
+                if(answer == "yes") {
+                    const res = await window.downloadAPI.createModPack({version: this.selectedVersion, name: this.packName});
+                    console.log(res)
+                    if (res.code != 200) {
+                        window.electronAPI.alert(JSON.stringify(res))
+                    }
+                    //TODO: can block user input till modpacklist comes back
+                    await this.getModpackList()
+                    this.currentEdit = this.packList.find(u => u.name == this.packName)
+                    this.currentPage = "editor"
+                    this.packName = "";
+                    this.selectedVersion = ""
                 }
-                await this.getModpackList()
-                this.currentEdit = this.packList.find(u => u.name == this.packName)
-                this.currentPage = "editor"
-                this.packName = "";
-                this.selectedVersion = ""
             },
 
 
@@ -201,7 +213,7 @@
                 delete packToExport.imported
                 // remove extra info from mods, can rebuild on import
                 packToExport.mods = packToExport.mods.map(mod => { 
-                    return {modid: mod.modid, fileID: mod.fileId, fileName: mod.fileName}
+                    return {modid: mod.modid, fileID: mod.fileID, fileName: mod.fileName}
                 });
                 window.electronAPI.copyToClipboard(JSON.stringify(packToExport))
                 window.electronAPI.alert("Pack string copied to clipboard")
@@ -214,9 +226,10 @@
                     return
                 }
                 const answer = await this.getResponseFromQuestion(
-                    `<b>IMPORTANT - install instructions</b><br>If prompted to uninstall old version of vintage story press no
+                    `<b>IMPORTANT - install instructions</b><br>If prompted to uninstall old version of vintage story <b>PRESS NO</b>
                     <br>Keep all install settings as is
                     <br>Once install is complete UNCHECK launch vintage story
+                    <br><br><b>TLDR</b>: When installer pops up: Press no - next - next - install - uncheck "launch Vintage story" - finish
                     <br><br><b>DO YOU UNDERSTAND?</b>`, 
                     ["yes", "no"]);
 
@@ -227,6 +240,7 @@
                         window.electronAPI.alert(JSON.stringify(res));
                     }
                     await this.getModpackList()
+                    this.loadedImportString = ""
                 }
             },
 
@@ -421,7 +435,8 @@
         <div v-if="currentPage == 'main'" class="container twothird" id="pack-launcher">
             <h1 class="text-centred">Packs</h1>
             <div id="pack-list" >
-                <h3 class="container-freestand">Current packs:</h3>
+                <h3 v-if="packList.length > 0" class="container-freestand">Current packs:</h3>
+                <p v-if="packList.length == 0" style="text-align: center;">No packs, try importing or creating one!</p>
                 <div v-for="pack in packList" class="container pack-container">
                     <p>
                         <span v-if="pack.imported">[Imported]<br></span>
@@ -548,13 +563,14 @@
         <div v-if="currentPage == 'create'" class="pack-creator container full">
             <h1>New pack</h1>
             <ol>
-                <p>!IMPORTANT! Due to ways the installer is written i cant make this process less of a pain, please read the following steps carefully.</p>
-                <li>Wait for version of Vintage Story to install</li>
-                <li>!IMPORTANT! If prompted asking if you want to uninstall old version of vintage story, !PRESS NO!</li>
-                <li>Dont change the install location</li>
-                <li>Uncheck launch vintage story through the installer - It will launch itself after the install</li>
-                <li>Once Vintage story launches for the first time, exit the game</li>
+                <p>!IMPORTANT! Due to the implimentation of the Vintage Story installer I can't make this process less of a pain, please read the following steps carefully.</p>
+                <li>Wait for your selected version of Vintage Story to install</li>
+                <li>If prompted asking if you want to uninstall old version of vintage story, <b>!PRESS NO!</b></li>
+                <li>Don't change the install location</li>
+                <li>Wait for install</li>
+                <li><b>Uncheck "launch Vintage Story"</b> - it will not be connected to your modpack</li>
                 <li>You can now add mods to your pack</li>
+                <h3>TLDR: When installer pops up: Press no - next - next - install - uncheck "launch Vintage story" - finish</h3>
             </ol>
             <form>
                 VS Version: 
@@ -562,10 +578,11 @@
                     <option disabled value="">Please select one</option>
                     <option v-for="i in versionList" v-bind:value="i">{{i}}</option>
                 </select>
-                <br>
+                <br><br>
                 Pack Name:
                 <input v-model="packName" id="pack-name" type="text">
             </form>
+            <br>
             <button type="button" @click="createModPack">Create pack</button>
         </div>
 

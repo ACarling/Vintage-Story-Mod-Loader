@@ -1,11 +1,12 @@
-const { app, BrowserWindow, ipcMain, dialog, clipboard } = require('electron') 
-const { createModPack, downloadModForPack, removeModFromPack, importModPack, deletePack } = require("./src/downloadManager.js")
-const { launchPack, listPacks, editPack, getDBmods } = require("./src/launcherManager.js")
+const { app, BrowserWindow, ipcMain, dialog, clipboard, globalShortcut  } = require('electron') 
+const { createModPack, downloadModForPack, removeModFromPack, importModPack, deletePack } = require("./src/managers/downloadManager.js")
+const { launchPack, listPacks, editPack, getDBmods } = require("./src/managers/launcherManager.js")
 const path = require("node:path")
 
-// TODO: prompt to pick what version of mod to use
-// TODO: prompt to delete pack
-// TODO: put loaded and new mods in editor under tabs
+const { dirname } = require('path');
+const __appDir = dirname(app.getPath("exe"));
+const fs = require('fs')
+
 
 // TODO: work out tag sorting 
 // TODO: default user settings loaded into every new pack (keybinds)
@@ -34,7 +35,10 @@ const createWindow = () => {
         width: 800,
         height: 800,
         webPreferences: {
-            preload: path.join(__dirname, 'preload.js')
+            preload: path.join(__dirname, '/src/preload.js'),
+            // TODO: find a way to inject these on make
+            devTools: false,
+            spellcheck: false,
         }
     });
 
@@ -68,10 +72,34 @@ app.whenReady().then(() => {
     ipcMain.handle("list:modPacks", listPacks)
     ipcMain.handle("list:modDBList", getDBmods)
 
+    console.log(`${__appDir}`)
+    if(!fs.existsSync(`${__appDir}/packs`)) {
+        fs.mkdirSync(`${__appDir}/packs`)        
+    }
+    if(!fs.existsSync(`${__appDir}/installercache`)) {
+        fs.mkdirSync(`${__appDir}/installercache`)        
+    }
+
     createWindow();
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow()
-    })
+    });
+
+
+    // stop page reloading
+    // find a way to only do this on make
+    app.on('browser-window-focus', function () {
+        globalShortcut.register("CommandOrControl+R", () => {
+            console.log("CommandOrControl+R is pressed: Shortcut Disabled");
+        });
+        globalShortcut.register("F5", () => {
+            console.log("F5 is pressed: Shortcut Disabled");
+        });
+    });
+    app.on('browser-window-blur', function () {
+        globalShortcut.unregister('CommandOrControl+R');
+        globalShortcut.unregister('F5');
+    });
 })
 
 
