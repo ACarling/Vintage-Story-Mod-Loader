@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vintage Loader</title>
+    <link rel="stylesheet" href="main.css">
+
+</head>
+<body>
+
+    <script type="module">
+        import { createApp } from 'https://unpkg.com/petite-vue?module'
+      
+        createApp({
+            versionNumber: "",
+            versionList: [],
+            packList: [],
+            modDBlist: [],
+
+            currentPage: "main",
+
+
+            // for creating packs
+            selectedVersion: '',
+            packName: '',
+
+            // for editing packs
+            currentEdit: null,
+
+            // for searching mods
+            newModStringFilter: "",
+            newModtagFilter: [],
+
+            loadedModStringFilter: "",
+            loadedModtagFilter: [],
+
+            // loaded mod import string
+            loadedImportString: "",
+
+
+            // downloading overlay
+            downloadStreams: [],
+
+
+            // yes no dialogue
+            posedQuestion: "",
+            offeredResponses: [],
+            chosenResponse: "",
+
+            // lifecycle
+            mounted() {
+                window.electronAPI.getVersion((event, data) => {
+                    this.versionNumber = data;
+                });
+                this.getVSGameVersionList();
+                this.getModpackList()
+                this.getModDBList()
+
+                // download stream api
+                window.downloadAPI.downloadStreamNotifier((event, data) => {
+                    const packetIn = data.split(":");
+                    if(packetIn[0] == "start") {
+                        this.downloadStreams.push({fileName: packetIn[1], progress: 0.0, mbremaining: 0.0, totalmb: 0.0})
+                    }
+                    if(packetIn[0] == "update") {
+                        const f = this.downloadStreams.find(u => u.fileName == packetIn[1]);
+                        const progressStat = packetIn[2].split(",");
+                        f.progress = progressStat[0];
+                        f.mbremaining = progressStat[1];
+                        f.totalmb = progressStat[2];
+                    }
+                    if(packetIn[0] == "stop") {
+                        const f = this.downloadStreams.findIndex(u => u.fileName == packetIn[1]);
+                        this.downloadStreams.splice(f, 1)
+                    }
+                    // console.log(data);
+                })
+            },
+
+            // Handle question in dialogue
+            getResponseFromQuestion(question, options) {
+                this.posedQuestion = question;
+                this.offeredResponses = options;
+                return new Promise((res,rej) => {
+                    window.addEventListener("click", event = (ev) => {
+                        if(this.chosenResponse.length > 0) {
+                            const response = this.chosenResponse;
+                            window.removeEventListener("click", event);
+                            this.chosenResponse = "";
+                            this.offeredResponses = []
+                            this.posedQuestion = ""
+                            res(response);
+                        }
+                    })
+                });
+            },
+
+
+            // methods
+            getVSGameVersionList() {
+                fetch("https://mods.vintagestory.at/api/gameversions").then(res => res.json())
+                .then((data) => {
+                    this.versionList = data.gameversions.map( gversion => gversion.name.substring(1))
+                })
+            },
+
+
+            getModpackList() {
+                return new Promise((res, rej) => {
+                    window.launcherAPI.getPackList().then((response) => {
+                        if(response.code != 200) {
+                            window.electronAPI.alert(JSON.stringify(response));
+                            return;
+                        }
+                        this.packList = response.data
+                        res(this.packList)
+                    });
+                })
+            },
+
+
+            async getModDBList() {
+                const res = await window.launcherAPI.getDBmods();
+                if(res.code == 200) {
+                    this.modDBlist = res.data;
+                } else {
+                    window.electronAPI.alert(JSON.stringify(res));
+                }
+            },
+
+
+            async createModPack() {
+                console.log(this.selectedVersion)
+                if(!this.versionList.find(u => u == this.selectedVersion)) {
+                    window.electronAPI.alert("pick a version")
+                    return;
+                }
+                const res = await window.downloadAPI.createModPack({version: this.selectedVersion, name: this.packName});
+                console.log(res)
+                if (res.code != 200) {
+                    window.electronAPI.alert(JSON.stringify(res))
+                }
+                await this.getModpackList()
+                this.currentEdit = this.packList.find(u => u.name == this.packName)
+                this.currentPage = "editor"
+                this.packName = "";
+                this.selectedVersion = ""
+            },
+
+
+            async deleteModPack(event) {
+                const answer = await this.getResponseFromQuestion(
+                    "Are you sure you want to remove this modpack? all associated save data will also be removed.", 
+                    ["yes: delete this pack and its data", "no: dont delete this pack and its data"]);
+                console.log(answer);
+                if(answer == "no: dont delete this pack and its data") {
+                    return;
+                } else if (answer == "yes: delete this pack and its data") {
+                    const packName = event.target.value;
+                    this.currentPage = "main"
+                    await window.downloadAPI.deletePack(packName);
+                    await this.getModpackList()
+                    this.currentEdit = null
+                }
+            },
+
+
+            editPack(event) {
+                this.currentEdit = this.packList.find(u => u.name == event.target.value)
+                this.currentPage = "editor"
+            },
+
+
+            pushPackChange(event) {
+                // need to parse unparse trick to turn proxy to json object
+                window.launcherAPI.editPack(JSON.parse(JSON.stringify(this.currentEdit)))
+                // just throw the whole edited pack to the backend
+            },
+
+
+            exportPack(event) {
+                const packID = event.target.value;
+                const packToExport = {...this.packList.find(u => u.name == packID)}
+                delete packToExport.imported
+                // remove extra info from mods, can rebuild on import
+                packToExport.mods = packToExport.mods.map(mod => { 
+                    return {modid: mod.modid, fileID: mod.fileId, fileName: mod.fileName}
+                });
+                window.electronAPI.copyToClipboard(JSON.stringify(packToExport))
+                window.electronAPI.alert("Pack string copied to clipboard")
+            },
+
+
+            async importPack(event) {
+                if(this.loadedImportString.length == 0) {
+                    window.electronAPI.alert("Pack string invalid")
+                    return
+                }
+                const answer = await this.getResponseFromQuestion(
+                    `<b>IMPORTANT - install instructions</b><br>If prompted to uninstall old version of vintage story press no
+                    <br>Keep all install settings as is
+                    <br>Once install is complete UNCHECK launch vintage story
+                    <br><br><b>DO YOU UNDERSTAND?</b>`, 
+                    ["yes", "no"]);
+
+                if(answer == "yes") {
+                    console.log(JSON.parse(this.loadedImportString))
+                    const res = await window.downloadAPI.importModPack(JSON.parse(this.loadedImportString))
+                    if(res.code != 200) {
+                        window.electronAPI.alert(JSON.stringify(res));
+                    }
+                    await this.getModpackList()
+                }
+            },
+
+
+            launchPack(event) {
+                window.launcherAPI.launchPack(event.target.value)
+            },
+
+
+            openLinkInBrowser(event) {
+                console.log(event.target.innerText)
+                window.electronAPI.openInBrowser(event.target.innerText)
+            },
+
+
+            addMod(event) {
+                const modID = event.target.value;
+                //TODO: this should come up with a dialogue to select what version
+                //      Need generic popup choice thing
+                fetch(`https://mods.vintagestory.at/api/mod/${modID}`).then(data => data.json())
+                .then(async res => {
+                    if(res.statuscode == 200) {
+
+                        var fileID
+                        var fileName
+
+                        if(res.mod.releases.length > 1) {
+                            const releaseChoices = res.mod.releases.map(u => u.modversion);
+                            const answer = await this.getResponseFromQuestion(
+                            "Which version of this mod would you like to download?.", 
+                            releaseChoices);
+
+                            const chosenRelease = res.mod.releases.find(u => u.modversion == answer);
+                            fileID = chosenRelease.fileid;
+                            fileName = chosenRelease.filename;
+                        } else {
+                            fileID = res.mod.releases[0].fileid;
+                            fileName = res.mod.releases[0].filename;
+                        }
+
+
+                        const downloadRes = await window.downloadAPI.downloadModForPack(
+                            {
+                                modID: modID, 
+                                modFileID: fileID, 
+                                modFileName: fileName,
+                                packName: this.currentEdit.name
+                            })
+                        if(downloadRes.code != 200) {
+                            window.electronAPI.alert(JSON.stringify(downloadRes))
+                        } else {
+                            const NewPackList = await this.getModpackList()
+                            this.currentEdit.mods = NewPackList.find(u => u.name == this.currentEdit.name).mods
+                        }
+                    } else {
+                        window.electronAPI.alert(JSON.stringify(res))
+                    }
+                })
+            },
+
+
+            async removeMod(event) {
+                const modID = event.target.value;
+                const modToRemove = this.currentEdit.mods.find(mod => mod.modid == modID);
+                console.log({
+                    modId: modID,
+                    modFileName: modToRemove.fileName,
+                    packName: this.currentEdit.name
+                })
+                await window.downloadAPI.removeModFromPack({
+                    modId: modID,
+                    modFileName: modToRemove.fileName,
+                    packName: this.currentEdit.name
+                })
+                const NewPackList = await this.getModpackList()
+                this.currentEdit.mods = NewPackList.find(u => u.name == this.currentEdit.name).mods
+            },
+
+
+            searchModList(modList, tagFilter, stringFilter, excludeFilter) {
+                if(!modList || modList.length == 0) {
+                    return []
+                }
+                return modList.filter(mod => {
+
+                    if(excludeFilter) {
+                        for (let i = 0; i < excludeFilter.length; i++) {
+                            const excludedMod = excludeFilter[i];
+                            if(mod.modid == excludedMod.modid) {
+                                return false;
+                            }
+                        }
+                    }
+
+                    // tag filter
+                    for(let i = 0; i < tagFilter.length; i++) {
+                        if(mod.tags.find(t => t == tagFilter[i])) {
+                            return true;
+                        }
+                    }
+
+                    // string filter
+                    if(mod.author.toLowerCase().includes(stringFilter)) {
+                        return true;
+                    }
+                    if(mod.name.toLowerCase().includes(stringFilter)) {
+                        return true;
+                    }
+                    if(mod.modid.toString().includes(stringFilter)) {
+                        return true;
+                    }
+                    
+                    if(tagFilter.length == 0 && stringFilter.length == 0) return true;
+                    return false;
+                })
+            },
+
+
+            resetToMain() {
+                this.currentPage = 'main'
+                this.newModStringFilter = ""
+                this.newModtagFilter = []
+                this.loadedModStringFilter = ""
+                this.loadedModtagFilter = []
+            },
+
+
+            get getSearchedNewMods() {
+                // return this.currentEdit.mods;
+                const tagFilter = this.newModtagFilter;
+                const stringFilter = this.newModStringFilter.toLowerCase();
+
+                if(this.currentEdit) {
+                    return this.searchModList(this.modDBlist, tagFilter, stringFilter, this.currentEdit.mods);
+                }
+                return [];
+            },
+
+
+            get getSearchedLoadedMods() {
+                const tagFilter = this.loadedModtagFilter;
+                const stringFilter = this.loadedModStringFilter.toLowerCase();
+                if(this.currentEdit) {
+                    return this.searchModList(this.currentEdit.mods, tagFilter, stringFilter);
+                }
+                return [];
+            }
+
+        }).mount()
+    </script>
+
+
+    <div v-scope @vue:mounted="mounted">
+
+        <!-- <p>VintageLoader version {{versionNumber}}</p> -->
+
+        <div v-if="downloadStreams.length > 0" class="dialogue overlay">
+            <div class="overlay-container">
+                <h3>We're downloading, Please do not exit the app</h3>
+                <div v-for="stream in downloadStreams" class="download-stream-container">
+                    <p>{{stream.fileName}}</p>
+                    <progress :value="stream.progress" max="100">{{stream.progress}}%</progress>
+                    <p>{{stream.mbremaining}} / {{stream.totalmb}}mb</p>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="posedQuestion.length > 0" class="dialogue overlay">
+            <div class="overlay-container">
+                <h3>ATTENTION</h3>
+                <p class="posed-question" v-html="posedQuestion"></p>
+                <div :class="offeredResponses.length == 2 ? 'dialogue-two-options' : 'dialogue-multiple-options'">
+                    <button 
+                        v-for="response in offeredResponses" 
+                        @click="chosenResponse = response">
+                        {{response}}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+
+        <button v-if="currentPage != 'main' && posedQuestion.length == 0" @click="resetToMain" class="back-button">Back</button> 
+
+        <!-- =================== Launcher page =================== -->
+        <div v-if="currentPage == 'main'" class="container twothird" id="pack-launcher">
+            <h1 class="text-centred">Packs</h1>
+            <div id="pack-list" >
+                <h3 class="container-freestand">Current packs:</h3>
+                <div v-for="pack in packList" class="container pack-container">
+                    <p>
+                        <span v-if="pack.imported">[Imported]<br></span>
+                        <span>{{pack.name}}</span>  <span>({{pack.version}})</span><br>
+                        <span>Mods: {{pack.mods.length}}</span> <br>
+                        <span>Author: {{pack.author}}</span> <br>
+                        <span>Description: {{pack.description}}</span> <br>
+                        <button v-bind:value="pack.name" v-if="pack.imported" @click="editPack">View Pack</button>
+                        <button v-bind:value="pack.name" v-if="!pack.imported" @click="editPack">Edit Pack</button>
+                        <button v-bind:value="pack.name" @click="exportPack">Export Pack</button>
+
+                    </p>
+                    <button v-bind:value="pack.name" @click="launchPack">Launch</button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="currentPage == 'main'" class="third container">
+            <div class="container flex-down-flow">
+                <h3 class="container-freestand">Import:</h3>
+                <p class="container-freestand">paste pack string here:</p>
+                <textarea class="container-freestand" style="min-height: 50px;" v-model="loadedImportString"></textarea>
+                <button class="container-freestand" @click="importPack">Import Pack From String</button>
+                <!-- <button class="container-freestand" @click="importPack">Choose Import File</button> -->
+            </div>
+    
+            <div class="container flex-down-flow">
+                <h3 class="container-freestand">Create:</h3>
+                <button  class="container-freestand" @click="currentPage = 'create'">Create New Empty Pack</button>
+            </div>
+        </div>
+
+
+        <!-- =================== Modpack editor page =================== -->
+        <div v-if="currentPage == 'editor'" class="edit-page">
+            <!-- Main details -->
+            <div class="container details third flex-down-flow">
+                <h1 v-if="currentEdit.imported">Pack Viewer</h1>
+                <h1 v-else>Pack Editor</h1>
+
+                <h3>{{currentEdit.name}}</h3>
+
+                <!-- cant edit details -->
+                <p v-if="currentEdit.imported">Author: {{currentEdit.author}}</p>
+                <p v-if="currentEdit.imported">Description: {{currentEdit.description}}</p>
+
+                <!-- can edit details -->
+                <span v-if="!currentEdit.imported">Author: <input @input="pushPackChange" type="text" v-model="currentEdit.author"></span>
+                <div v-if="!currentEdit.imported">
+                    <p>Description:</p> 
+                    <textarea  style="width: calc(100% - 5px); resize: none; height: 50px;" @input="pushPackChange" v-model="currentEdit.description"></textarea>            
+                </div>
+
+                <button @click="deleteModPack" :value="currentEdit.name">Delete Pack</button>
+            </div>
+            
+            
+            <!-- Loaded mods -->
+            <div class="container noscroll" :class="currentEdit.imported ? 'twothird' : 'third'">
+                <div class="search-header">
+                    <h3>Loaded mods</h3>
+                    <form>
+                        Search:
+                        <input type="text" v-model="loadedModStringFilter">
+                    </form>
+                </div>
+
+
+
+                <div v-if="currentEdit.mods.length != 0" class="mod-list">
+                    <div v-for="mod in getSearchedLoadedMods" class="container mod-item">
+                        <p>{{mod.modid}} {{mod.name}}</p>
+                        <p>by: {{mod.author}}</p>
+                        <p>{{mod.summary}}</p>
+                        <p>{{mod.tags}}</p> <br>
+                        <button v-if="!currentEdit.imported" @click="removeMod" :value="mod.modid">Remove mod</button>
+                    </div>
+                </div>
+                <p class="text-centred" v-else>No loaded mods</p>
+            </div>
+
+
+            <!-- Downloadable mods -->
+            <div class="container noscroll third" v-if="!currentEdit.imported">
+
+                <div class="search-header">
+                    <h3>Add mods</h3>
+                    <form>
+                        Search:
+                        <input type="text" v-model="newModStringFilter">
+                    </form>
+                </div>
+
+
+                <div class="mod-list">
+                    <p v-if="modDBlist.length == 0">Loding mods from DB...</p>
+                    <div v-for="mod in getSearchedNewMods" class="container mod-item">
+                        <p>{{mod.modid}} {{mod.name}}</p>
+                        <p>by: {{mod.author}}</p>
+                        <p>{{mod.summary}}</p>
+                        <p>{{mod.tags}}</p>
+                        <a @click="openLinkInBrowser" v-if="mod.urlalias">https://mods.vintagestory.at/{{mod.urlalias}}</a>
+                        <button @click="addMod" :value="mod.modid">Add to pack</button>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- =================== New Pack page =================== -->
+
+        <div v-if="currentPage == 'create'" class="pack-creator container full">
+            <h1>New pack</h1>
+            <ol>
+                <p>!IMPORTANT! Due to ways the installer is written i cant make this process less of a pain, please read the following steps carefully.</p>
+                <li>Wait for version of Vintage Story to install</li>
+                <li>!IMPORTANT! If prompted asking if you want to uninstall old version of vintage story, !PRESS NO!</li>
+                <li>Dont change the install location</li>
+                <li>Uncheck launch vintage story through the installer - It will launch itself after the install</li>
+                <li>Once Vintage story launches for the first time, exit the game</li>
+                <li>You can now add mods to your pack</li>
+            </ol>
+            <form>
+                VS Version: 
+                <select v-model="selectedVersion">
+                    <option disabled value="">Please select one</option>
+                    <option v-for="i in versionList" v-bind:value="i">{{i}}</option>
+                </select>
+                <br>
+                Pack Name:
+                <input v-model="packName" id="pack-name" type="text">
+            </form>
+            <button type="button" @click="createModPack">Create pack</button>
+        </div>
+
+    </div>
+
+
+    <script>
+        document.querySelector(':root').style.setProperty('--innerheight', window.innerHeight + "px");
+        window.addEventListener('resize',u => {
+            console.log(window.innerHeight)
+            document.querySelector(':root').style.setProperty('--innerheight', window.innerHeight + "px");
+        })
+    </script>
+
+</body>
+</html>
