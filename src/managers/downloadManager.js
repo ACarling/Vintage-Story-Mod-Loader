@@ -1,9 +1,4 @@
-const {app} = require("electron")
-
-const { dirname } = require('path');
-const __appDir = dirname(app.getPath("exe"));
-
-const {OSdata, getOSString} = require("./globals.js")
+const {OSdata, getOSString, __appDir} = require("./globals.js")
 const fs = require("fs")
 const axios = require('axios');
 const https = require("https")
@@ -12,8 +7,12 @@ const { exec } = require('child_process');
 const {CreateRes} = require("./common.js");
 const { loadedMods, getDBmods } = require('./launcherManager.js');
 
-console.log(`${__appDir}`)
-
+// get sudo perms
+var sudo = require('sudo-prompt');
+var options = {
+  name: 'Vintage Launcher',
+  icns: '/Applications/Electron.app/Contents/Resources/Electron.icns', // (optional)
+};
 
 //https://cdn.vintagestory.at/gamefiles/stable/vs_install_win-x64_1.18.15.exe
 //https://cdn.vintagestory.at/gamefiles/stable/vs_client_osx-x64_1.18.15.tar.gz
@@ -95,7 +94,7 @@ function installVSVersion(installerDest, packName) {
     return new Promise(async (res, rej) => {
         if(OSdata.isWindows) {
             console.log("starting install")
-            exec(`${installerDest} /COMPONENTS="!*" /DIR="${__appDir}/packs/${packName}/Game" `, async (err, stdout, stderr) => {
+            sudo.exec(`${installerDest} /COMPONENTS="!*" /DIR="${__appDir}/packs/${packName}/Game" `, async (err, stdout, stderr) => {
                 if (err) {
                     console.error(`exec error: ${err}`);
                     rej(CreateRes(500, err));

@@ -1,12 +1,9 @@
-const {app} = require("electron")
-
-const { dirname } = require('path');
-const __appDir = dirname(app.getPath("exe"));
-
 const {CreateRes} = require("./common.js")
 const fs = require('fs')
 const { spawn } = require('child_process');
 const axios = require('axios');
+const { __appDir } = require("./globals.js");
+const {shell} = require('electron')
 
 var loadedMods = new Promise(async (res,rej) => {
     const response = await axios.get("https://mods.vintagestory.at/api/mods");
@@ -36,6 +33,22 @@ module.exports = {
             res("Launching pack")
             process.exit(0);
         })
+    },
+
+    // launchPackServer(event, packName) {
+    //     console.log(packName)
+    //     console.log("launching " + packName + " server")
+    //     return new Promise((res, rej) => {
+    //         var child = spawn(`${__appDir}/packs/${packName}/Game/VintagestoryServer.exe`, 
+    //             ["--dataPath", `${__appDir}\\packs\\${packName}\\GameData`], 
+    //             {detached: true})
+    //         child.unref();
+    //         res("Launching pack")
+    //     })
+    // },
+
+    openInFileExplorer(event, packName) {
+        shell.openPath(`${__appDir}\\packs\\${packName}\\`);
     },
 
     /**

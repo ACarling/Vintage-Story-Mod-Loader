@@ -3,7 +3,6 @@ const { contextBridge, ipcRenderer } = require('electron')
 // Exposed protected methods in the render process
 contextBridge.exposeInMainWorld(
     'electronAPI', {
-        getVersion: (listener) => ipcRenderer.on('appVersion', listener),
         alert: (alertText) => ipcRenderer.send("alert", alertText),
         copyToClipboard: (textToCopy) => ipcRenderer.send("copyToClipboard", textToCopy),
         openInBrowser: (url) => ipcRenderer.send("openInBrowser", url)
@@ -24,8 +23,11 @@ contextBridge.exposeInMainWorld(
 contextBridge.exposeInMainWorld(
     'launcherAPI', {
         launchPack: (packName) => ipcRenderer.send('launchPack', packName),
+        // launchPackServer: (packName) => ipcRenderer.send('launchPackServer', packName),
+        openInFileExplorer: (packName) => ipcRenderer.send('openInFileExplorer', packName),
         editPack: (editedPack) => ipcRenderer.send('editPack', editedPack),
         getPackList: () => ipcRenderer.invoke('list:modPacks'),
         getDBmods: () => ipcRenderer.invoke('list:modDBList'),
+        appVersionNotifier: (listener) => ipcRenderer.on('get:appversion', listener),
     }
 );

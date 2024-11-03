@@ -13,7 +13,6 @@
         import { createApp } from 'https://unpkg.com/petite-vue?module'
       
         createApp({
-            versionNumber: "",
             versionList: [],
             packList: [],
             modDBlist: [],
@@ -24,6 +23,7 @@
             // for creating packs
             selectedVersion: '',
             packName: '',
+            showExperimentalVersions: false,
 
             // for editing packs
             currentEdit: null,
@@ -53,9 +53,7 @@
 
             // lifecycle
             mounted() {
-                window.electronAPI.getVersion((event, data) => {
-                    this.versionNumber = data;
-                });
+
                 this.getVSGameVersionList();
                 this.getModpackList()
                 this.getModDBList()
@@ -79,7 +77,7 @@
                         this.downloadStreams.splice(f, 1)
                     }
                     // console.log(data);
-                })
+                });
             },
 
             // Handle question in dialogue
@@ -99,7 +97,6 @@
                     })
                 });
             },
-
 
             // methods
             getVSGameVersionList() {
@@ -198,6 +195,9 @@
                 this.currentEdit = this.packList.find(u => u.name == event.target.value)
                 this.currentPage = "editor"
             },
+            openInFileExplorer(event) {
+                window.launcherAPI.openInFileExplorer(event.target.value);
+            },
 
 
             pushPackChange(event) {
@@ -247,6 +247,9 @@
 
             launchPack(event) {
                 window.launcherAPI.launchPack(event.target.value)
+            },
+            launchPackServer(event) {
+                window.launcherAPI.launchPackServer(event.target.value)
             },
 
 
@@ -393,7 +396,16 @@
                     return this.searchModList(this.currentEdit.mods, tagFilter, stringFilter);
                 }
                 return [];
-            }
+            },
+
+
+            get sortedVSVersionList() {
+                if(this.showExperimentalVersions) {
+                    return this.versionList;
+                } else {
+                    return this.versionList.filter(u => !u.includes("rc") && !u.includes("pre") )
+                }
+            },
 
         }).mount()
     </script>
@@ -401,7 +413,6 @@
 
     <div v-scope @vue:mounted="mounted">
 
-        <!-- <p>VintageLoader version {{versionNumber}}</p> -->
 
         <div v-if="downloadStreams.length > 0" class="dialogue overlay">
             <div class="overlay-container">
@@ -429,7 +440,7 @@
         </div>
 
 
-        <button v-if="currentPage != 'main' && posedQuestion.length == 0" @click="resetToMain" class="back-button">Back</button> 
+        <button v-if="currentPage != 'main' && posedQuestion.length == 0 && downloadStreams.length == 0" @click="resetToMain" class="back-button">Back</button> 
 
         <!-- =================== Launcher page =================== -->
         <div v-if="currentPage == 'main'" class="container twothird" id="pack-launcher">
@@ -444,12 +455,16 @@
                         <span>Mods: {{pack.mods.length}}</span> <br>
                         <span>Author: {{pack.author}}</span> <br>
                         <span>Description: {{pack.description}}</span> <br>
-                        <button v-bind:value="pack.name" v-if="pack.imported" @click="editPack">View Pack</button>
-                        <button v-bind:value="pack.name" v-if="!pack.imported" @click="editPack">Edit Pack</button>
+                        <!-- <button v-bind:value="pack.name" v-if="pack.imported" @click="editPack">View Pack</button> -->
+                        <button v-bind:value="pack.name" v-if="pack.imported" @click="editPack">Edit Pack</button>
                         <button v-bind:value="pack.name" @click="exportPack">Export Pack</button>
+                        <button v-bind:value="pack.name" @click="openInFileExplorer">Open in file explorer</button>
 
                     </p>
-                    <button v-bind:value="pack.name" @click="launchPack">Launch</button>
+                    <span style="display: flex; flex-direction:column; justify-content: space-evenly;">
+                        <button v-bind:value="pack.name" @click="launchPack">Launch Client</button>
+                        <!-- <button v-bind:value="pack.name" @click="launchPackServer">Launch Server</button> -->
+                    </span>
                 </div>
             </div>
         </div>
@@ -497,7 +512,9 @@
             <!-- Loaded mods -->
             <div v-if="!showModDownloadPage" class="container noscroll twothird">
                 <div class="search-header">
-                    <button v-if="!currentEdit.imported" @click="showModDownloadPage = true"> Show downloadable mods &gt;</button>
+                    <div style="display: flex; justify-content: flex-end;">
+                        <button @click="showModDownloadPage = true"> List Avaliable Mods &gt;</button>
+                    </div>
                     <h3>Loaded mods</h3>
                     <form>
                         Search:
@@ -518,7 +535,7 @@
                         <p>{{mod.summary}}</p>
                         <p>{{mod.tags}}</p>
                         <a @click="openLinkInBrowser" v-if="mod.urlalias">https://mods.vintagestory.at/{{mod.urlalias}}</a><br>
-                        <button v-if="!currentEdit.imported" @click="removeMod" :value="mod.modid">Remove mod</button>
+                        <button @click="removeMod" :value="mod.modid">Remove mod</button>
                     </div>
                 </div>
                 <p class="text-centred" v-else>No loaded mods</p>
@@ -526,7 +543,7 @@
 
 
             <!-- Downloadable mods -->
-            <div v-if="showModDownloadPage" class="container noscroll twothird" v-if="!currentEdit.imported">
+            <div v-if="showModDownloadPage" class="container noscroll twothird">
 
                 <div class="search-header">
                     <button @click="showModDownloadPage = false"> &lt; Show loaded mods</button>
@@ -572,14 +589,17 @@
                 <li>You can now add mods to your pack</li>
                 <h3>TLDR: When installer pops up: Press no - next - next - install - uncheck "launch Vintage story" - finish</h3>
             </ol>
-            <form>
-                VS Version: 
+            <form style="display: grid; grid-template-columns: auto 150px; row-gap: 10px;">
+                <label>Show Experimental Game Versions:</label>
+                <input type="checkbox" v-model="showExperimentalVersions" style="justify-self: right;">  
+
+                <label>Vintage Story Game Version:</label>
                 <select v-model="selectedVersion">
                     <option disabled value="">Please select one</option>
-                    <option v-for="i in versionList" v-bind:value="i">{{i}}</option>
-                </select>
-                <br><br>
-                Pack Name:
+                    <option v-for="i in sortedVSVersionList" v-bind:value="i">{{i}}</option>
+                </select>  
+
+                <label>Pack Name:</label>
                 <input v-model="packName" id="pack-name" type="text">
             </form>
             <br>
@@ -587,7 +607,11 @@
         </div>
 
     </div>
-
+    <!-- END VUE SCOPE -->
+    
+    
+    
+    <p id="version-number"></p>
 
     <script>
         document.querySelector(':root').style.setProperty('--innerheight', window.innerHeight + "px");
@@ -595,6 +619,9 @@
             console.log(window.innerHeight)
             document.querySelector(':root').style.setProperty('--innerheight', window.innerHeight + "px");
         })
+        window.launcherAPI.appVersionNotifier((event, data) => {
+            document.getElementById('version-number').innerText = "v. " + data;
+        });
     </script>
 
 </body>

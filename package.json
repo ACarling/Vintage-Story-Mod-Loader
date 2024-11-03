@@ -2,7 +2,7 @@
   "name": "vintageloader",
   "productName": "vintageloader",
   "version": "1.0.0",
-  "description": "My Electron application description",
+  "description": "Vintage story mod launcher",
   "main": "main.js",
   "scripts": {
     "start": "electron-forge start",
@@ -14,12 +14,13 @@
   "keywords": [],
   "author": {
     "name": "ACarling",
-    "email": "aidanc@internode.on.net"
+    "email": "aidancc02@gmail.com"
   },
   "license": "MIT",
   "dependencies": {
     "axios": "^1.6.0",
-    "electron-squirrel-startup": "^1.0.0"
+    "electron-squirrel-startup": "^1.0.0",
+    "sudo-prompt": "^9.2.1"
   },
   "devDependencies": {
     "@electron-forge/cli": "^6.4.2",
