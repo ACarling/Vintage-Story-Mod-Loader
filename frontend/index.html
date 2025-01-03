@@ -80,6 +80,7 @@
                 });
             },
 
+
             // Handle question in dialogue
             getResponseFromQuestion(question, options) {
                 this.posedQuestion = question;
@@ -248,6 +249,8 @@
             launchPack(event) {
                 window.launcherAPI.launchPack(event.target.value)
             },
+
+
             launchPackServer(event) {
                 window.launcherAPI.launchPackServer(event.target.value)
             },
@@ -456,7 +459,7 @@
                         <span>Author: {{pack.author}}</span> <br>
                         <span>Description: {{pack.description}}</span> <br>
                         <!-- <button v-bind:value="pack.name" v-if="pack.imported" @click="editPack">View Pack</button> -->
-                        <button v-bind:value="pack.name" v-if="pack.imported" @click="editPack">Edit Pack</button>
+                        <button v-bind:value="pack.name" @click="editPack">Edit Pack</button>
                         <button v-bind:value="pack.name" @click="exportPack">Export Pack</button>
                         <button v-bind:value="pack.name" @click="openInFileExplorer">Open in file explorer</button>
 
@@ -599,11 +602,14 @@
                     <option v-for="i in sortedVSVersionList" v-bind:value="i">{{i}}</option>
                 </select>  
 
-                <label>Pack Name:</label>
+                <label>Pack Name: (must have no spaces)</label>
                 <input v-model="packName" id="pack-name" type="text">
             </form>
             <br>
-            <button type="button" @click="createModPack">Create pack</button>
+
+            <button v-if="/^[a-zA-Z0-9]+$/.test(packName) && packName.length >= 3" type="button" @click="createModPack">Create pack</button>
+            <button v-else type="button" @click="createModPack" disabled>Create pack</button>
+
         </div>
 
     </div>

@@ -27,21 +27,27 @@ var options = {
  * @returns 
  */
 function getVSDownloadURL(versionName) {
+
+    let stableUnstable = "stable"
+    if(versionName.includes("rc")) {
+        stableUnstable = "unstable"
+    }
+
     if(parseInt(versionName.replaceAll(".", "")) >= 1188) {
         if(OSdata.isWindows) {
-            return  `https://cdn.vintagestory.at/gamefiles/stable/vs_install_win-x64_${versionName}.exe`
+            return  `https://cdn.vintagestory.at/gamefiles/${stableUnstable}/vs_install_win-x64_${versionName}.exe`
         } else if(OSdata.isMac) {
-            return  `https://cdn.vintagestory.at/gamefiles/stable/vs_client_osx-x64_${versionName}.tar.gz`
+            return  `https://cdn.vintagestory.at/gamefiles/${stableUnstable}/vs_client_osx-x64_${versionName}.tar.gz`
         } else if(OSdata.isLinux) {
-            return  `https://cdn.vintagestory.at/gamefiles/stable/vs_client_linux-x64_${versionName}.tar.gz`
+            return  `https://cdn.vintagestory.at/gamefiles/${stableUnstable}/vs_client_linux-x64_${versionName}.tar.gz`
         }
     } else {
         if(OSdata.isWindows) {
-            return  `https://cdn.vintagestory.at/gamefiles/stable/vs_install_${versionName}.exe`
+            return  `https://cdn.vintagestory.at/gamefiles/${stableUnstable}/vs_install_${versionName}.exe`
         } else if(OSdata.isMac) {
-            return  `https://cdn.vintagestory.at/gamefiles/stable/vs_mac_${versionName}.tar.gz`
+            return  `https://cdn.vintagestory.at/gamefiles/${stableUnstable}/vs_mac_${versionName}.tar.gz`
         } else if(OSdata.isLinux) {
-            return  `https://cdn.vintagestory.at/gamefiles/stable/vs_archive${versionName}.tar.gz`
+            return  `https://cdn.vintagestory.at/gamefiles/${stableUnstable}/vs_archive${versionName}.tar.gz`
         }    
     }
 }
@@ -66,7 +72,9 @@ function downloadFile(event, outfile, downloadURL, downloadDest) {
             response.pipe(outfile);
     
             var cur = 0;
+            console.log(response.headers)
             var len = parseInt(response.headers['content-length'], 10);
+            if(isNaN(len)) { len = 1 }
             var total = len / 1048576; //1048576 - bytes in  1Megabyte
             
             console.log(`found download server: ${downloadURL} now downloading to: ${outfile.path}`)
@@ -113,11 +121,14 @@ function installVSVersion(installerDest, packName) {
     })
 }
 
+function escapeFileName(filename) {
+    return filename.replaceAll(".", "_")
+}
 
 async function downloadVSVersion(event, versionName, packName) {
     console.log("Downloading: " + versionName + " " + packName)
-    const installerDest = `${__appDir}/installercache/${versionName}installer.exe`
-    if(!fs.existsSync(`${__appDir}/installercache/${versionName}installer.exe`)) {
+    const installerDest = `${__appDir}/installercache/${escapeFileName(versionName)}installer.exe`
+    if(!fs.existsSync(installerDest)) {
         var file = await fs.createWriteStream(installerDest);
     
         const downloadRes = await downloadFile(event, file, getVSDownloadURL(versionName), installerDest)
@@ -152,7 +163,7 @@ module.exports = {
 
         const isImported = data.imported ? true : false
 
-        let regex = /^[a-zA-Z1-9]+$/; 
+        let regex = /^[a-zA-Z0-9]+$/; 
         if(!regex.test(packName)) {
             return CreateRes(400, "Pack name includes illegal characters, Must be exclusivley letters and numbers, no spaces")
         }
